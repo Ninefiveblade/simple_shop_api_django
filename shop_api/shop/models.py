@@ -6,24 +6,68 @@ User = get_user_model()
 
 
 class Order(models.Model):
-    user = ...
-    product = ...
-    pass
+    ACCEPTED = 'Принят'
+    PICKUP = 'Самовывоз'
+    DELIVERY = 'Доставка'
+    CANCELED = 'Отменен'
+    WAIT_TO_CANCEL = 'Ожидает отмены'
+    AWAIT = 'Ожидает поступления'
+    GOING_TO = 'Собирается'
+    REFUND = 'Возврат'
+
+    CHOISES = [
+        (ACCEPTED, 'Принят в магазине'),
+        (PICKUP, 'Самовывоз'),
+        (DELIVERY, 'Доставка'),
+        (CANCELED, 'Отменен'),
+        (WAIT_TO_CANCEL, 'Ожидает отмены'),
+        (AWAIT, 'Ожидает поступления'),
+        (GOING_TO, 'Собирается'),
+        (REFUND, 'Возврат'),
+    ]
+
+    status: str = models.CharField(
+        verbose_name="Статус заказа",
+        choices=CHOISES,
+        default=ACCEPTED
+    )
+    user = models.ForeignKey(
+        User,
+        related_name="order_user",
+        on_delete=models.CASCADE
+    )
+    product = models.ManyToManyField(
+        "ProductMeasurement",
+        related_name="order_product",
+    )
+    pub_date = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    class Meta:
+        verbose_name = "Заказ"
+        verbose_name_plural = "Заказы"
+        ordering = ["id"]
+
+    def __str__(self) -> str:
+        return (
+            f"Заказ №{self.id}, статус: {self.status}"
+        )
 
 
 class Product(models.Model):
-    author = models.ForeignKey(
+    author: User = models.ForeignKey(
         User,
         verbose_name="Создатель товара.",
         related_name="product_author"
     )
-    name = models.CharField(
+    name: str = models.CharField(
         max_length=255,
         verbose_name="Наименование товара",
         blank=False,
         index=True
     )
-    art = models.CharField(
+    art: str = models.CharField(
         max_length=50,
         verbose_name="Артикул товара"
     )
@@ -38,19 +82,17 @@ class Product(models.Model):
     pub_date = models.DateTimeField(
         auto_now_add=True
     )
-    price = models.FloatField(
-        validators=[
-            MinValueValidator(1, message="Цена не может быть меньше рубля")
-        ],
+    price: float = models.ManyToManyField(
+        "Price",
         verbose_name="Цена товара",
     )
     image = models.ImageField(
         verbose_name="Картинка товара",
     )
-    groups = models.ForeignKey(
-        "Groups",
+    group = models.ForeignKey(
+        "Group",
         verbose_name="Группа товара",
-        related_name="product_groups"
+        related_name="product_group"
     )
     description: str = models.TextField(
         "Описание товара"
@@ -65,7 +107,35 @@ class Product(models.Model):
         return self.name
 
 
+class Price(models.Model):
+    """Цена."""
+    CHOISES = [
+        ('RUR', 'руб.'),
+        ('USD', 'дол.'),
+        ('EUR', 'евр.')
+    ]
+
+    cost = models.FloatField(
+        verbose_name="Цена",
+        validators=[
+            MinValueValidator(
+                1,
+                message="Цена не может быть меньше 1"
+            )
+        ],
+        blank=False
+    )
+    valute = models.CharField(
+        verbose_name="Валюта",
+        blank=False,
+        max_length=4,
+        choices=CHOISES,
+        default='RUR'
+    )
+
+
 class ProductMeasurement(models.Model):
+    "Единица измерения и количество товара."
     PIECE = 'Штука'
     KILOGRAM = 'Килограмм'
     GRAM = 'Грамм'
@@ -78,15 +148,15 @@ class ProductMeasurement(models.Model):
         (KILOGRAM, 'кг.'),
         (GRAM, 'гр.'),
         (LITRE, 'л.'),
-        (PACK, 'упаковка'),
+        (PACK, 'уп.'),
         (MILLILITER, 'мл.'),
     ]
-    measurement = models.CharField(
+    measurement: str = models.CharField(
         verbose_name="Единица измерения",
         choices=CHOISES,
         blank=False
     )
-    amount = models.PositiveIntegerField(
+    amount: int = models.PositiveIntegerField(
         verbose_name="Количество",
         blank=False
     )
@@ -98,9 +168,9 @@ class ProductMeasurement(models.Model):
     )
 
     class Meta:
-        verbose_name = "Товар"
-        verbose_name_plural = "Товары"
-        ordering = ["id"]
+        verbose_name = "Количество товара"
+        verbose_name_plural = "Количество товаров"
+        ordering = ["product_id"]
         constraints = [
             models.UniqueConstraint(fields=["product", "amount"],
                                     name="unique_product_amount")
@@ -111,6 +181,7 @@ class ProductMeasurement(models.Model):
 
 
 class Manufactorer(models.Model):
+    """Производитель."""
     name: str = models.CharField(
         max_length=255,
         verbose_name="Имя производителя",
@@ -133,7 +204,8 @@ class Manufactorer(models.Model):
         return self.name
 
 
-class Shop_Cart(models.Model):
+class ShopCart(models.Model):
+    """Корзина."""
     user: User = models.ForeignKey(
         User,
         verbose_name="Пользователь",
@@ -148,28 +220,47 @@ class Shop_Cart(models.Model):
 
     class Meta:
         verbose_name = "Корзина"
-        verbose_name = "Корзина"
+        verbose_name_plural = "Корзины"
+        ordering = ["id"]
+        constraints = [
+            models.UniqueConstraint(fields=["product", "user"],
+                                    name="unique_product_user")
+        ]
 
     def __str__(self) -> str:
         return f"Корзина пользователя {self.user.username}"
 
 
 class Favorites(models.Model):
-    user = models.ForeignKey(
+    "Избранные товары."
+    user: User = models.ForeignKey(
         User,
         verbose_name="Пользователь",
         related_name="shop_cart_user",
         on_delete=models.CASCADE
     )
-    product = models.ForeignKey(
+    product: Product = models.ForeignKey(
         Product,
         verbose_name="Товар",
         related_name="shop_cart_product",
         on_delete=models.CASCADE
     )
 
+    class Meta:
+        verbose_name = "Избранный товар"
+        verbose_name_plural = "Избранные товары"
+        ordering = ["id"]
+        constraints = [
+            models.UniqueConstraint(fields=["product", "user"],
+                                    name="unique_product_user_favotite")
+        ]
 
-class Groups(models.Model):
+    def __str__(self) -> str:
+        return f"{self.user.username}, {self.product.name}"
+
+
+class Group(models.Model):
+    """Группы товаров."""
     name: str = models.CharField(
         max_length=255,
         verbose_name="Имя группы",
@@ -182,6 +273,11 @@ class Groups(models.Model):
         blank=False,
         index=True
     )
+
+    class Meta:
+        verbose_name = "Группа товаров"
+        verbose_name_plural = "Группы товаров"
+        ordering = ["name"]
 
     def __str__(self) -> str:
         return self.name

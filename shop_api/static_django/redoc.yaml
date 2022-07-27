@@ -1,0 +1,119 @@
+openapi: 3.0.2
+info:
+  title: 'Shop API'
+  version: '1.0'
+  description: |
+    запросы к API начинаются с `/api/`
+
+    # Описание
+    Проект **ShopApi** Представляет собой Api магазина основанное на REST.
+
+    # Алгоритм регистрации пользователей
+    1. Пользователь отправляет POST-запрос на добавление нового пользователя с параметрами `email` и `username` на эндпоинт `/api/v1/auth/signup/`.
+    2. **ShopApi** отправляет письмо с кодом подтверждения (`confirmation_code`) на адрес  `email`.
+    3. Пользователь отправляет POST-запрос с параметрами `username` и `confirmation_code` на эндпоинт `/api/v1/auth/token/`, в ответе на запрос ему приходит `token` (JWT-токен).
+    4. При желании пользователь отправляет PATCH-запрос на эндпоинт `/api/v1/users/me/` и заполняет поля в своём профайле (описание полей — в документации).
+
+    # Пользовательские роли
+    - **Аноним** — может просматривать описания произведений, читать отзывы и комментарии.
+    - **Аутентифицированный пользователь** (`user`) — может, как и **Аноним**, читать всё, дополнительно он может публиковать отзывы и ставить оценку произведениям (фильмам/книгам/песенкам), может комментировать чужие отзывы; может редактировать и удалять **свои** отзывы и комментарии. Эта роль присваивается по умолчанию каждому новому пользователю.
+    - **Модератор** (`moderator`) — те же права, что и у **Аутентифицированного пользователя** плюс право удалять **любые** отзывы и комментарии.
+    - **Администратор** (`admin`) — полные права на управление всем контентом проекта. Может создавать и удалять произведения, категории и жанры. Может назначать роли пользователям. 
+    - **Суперюзер Django** — обладет правами администратора (`admin`)
+
+
+servers:
+  - url: /api/v1/
+
+tags:
+  - name: AUTH
+    description: Регистрация пользователей и выдача токенов
+  - name: _
+    description: Все заказы магазина
+  - name: _
+    description: Все группы товаров
+
+paths:
+  /auth/signup/:
+    post:
+      tags:
+        - AUTH
+      operationId: Регистрация нового пользователя
+      description: |
+        Получить код подтверждения на переданный `email`.
+
+        Права доступа: **Доступно без токена.**
+
+        Использовать имя 'me' в качестве `username` запрещено.
+
+        Поля `email` и `username` должны быть уникальными.
+      parameters: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              required:
+                - email
+                - username
+              properties:
+                email:
+                  type: string
+                username:
+                  type: string
+      responses:
+        200:
+          content:
+            application/json:
+              schema:
+                properties:
+                  email:
+                    type: string
+                  username:
+                    type: string
+                required:
+                - email
+                - username
+          description: 'Удачное выполнение запроса'
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+          description: 'Отсутствует обязательное поле или оно некорректно'
+  /auth/token/:
+    post:
+      tags:
+        - AUTH
+      operationId: Получение JWT-токена
+      description: |
+        Получение JWT-токена в обмен на username и confirmation code.
+
+        Права доступа: **Доступно без токена.**
+      requestBody:
+        content:
+          application/json:
+            schema:
+              required:
+                - username
+                - confirmation_code
+              properties:
+                username:
+                  type: string
+                confirmation_code:
+                  type: string
+                  writeOnly: true
+      responses:
+        200:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Token'
+          description: 'Удачное выполнение запроса'
+        400:
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationError'
+          description: 'Отсутствует обязательное поле или оно некорректно'
+        404:
+          description: Пользователь не найден
