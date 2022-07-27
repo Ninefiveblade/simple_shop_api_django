@@ -5,6 +5,12 @@ from django.core.validators import MinValueValidator
 User = get_user_model()
 
 
+class Order(models.Model):
+    user = ...
+    product = ...
+    pass
+
+
 class Product(models.Model):
     author = models.ForeignKey(
         User,
@@ -59,6 +65,51 @@ class Product(models.Model):
         return self.name
 
 
+class ProductMeasurement(models.Model):
+    PIECE = 'Штука'
+    KILOGRAM = 'Килограмм'
+    GRAM = 'Грамм'
+    LITRE = 'Литр'
+    PACK = 'Упаковка'
+    MILLILITER = 'Миллилитр'
+
+    CHOISES = [
+        (PIECE, 'шт.'),
+        (KILOGRAM, 'кг.'),
+        (GRAM, 'гр.'),
+        (LITRE, 'л.'),
+        (PACK, 'упаковка'),
+        (MILLILITER, 'мл.'),
+    ]
+    measurement = models.CharField(
+        verbose_name="Единица измерения",
+        choices=CHOISES,
+        blank=False
+    )
+    amount = models.PositiveIntegerField(
+        verbose_name="Количество",
+        blank=False
+    )
+    product = models.ForeignKey(
+        "Product",
+        related_name="product_measurements",
+        on_delete=models.CASCADE,
+        blank=False
+    )
+
+    class Meta:
+        verbose_name = "Товар"
+        verbose_name_plural = "Товары"
+        ordering = ["id"]
+        constraints = [
+            models.UniqueConstraint(fields=["product", "amount"],
+                                    name="unique_product_amount")
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.product.name}, {self.measurement}"
+
+
 class Manufactorer(models.Model):
     name: str = models.CharField(
         max_length=255,
@@ -73,13 +124,49 @@ class Manufactorer(models.Model):
         verbose_name="Фото производителя"
     )
 
+    class Meta:
+        verbose_name = "Производитель"
+        verbose_name_plural = "Производители"
+        ordering = ["id"]
+
+    def __str__(self) -> str:
+        return self.name
+
 
 class Shop_Cart(models.Model):
-    pass
+    user: User = models.ForeignKey(
+        User,
+        verbose_name="Пользователь",
+        related_name="shop_cart_user",
+        on_delete=models.CASCADE
+    )
+    product: Product = models.ManyToManyField(
+        Product,
+        verbose_name="Товар",
+        related_name="shop_cart_product",
+    )
+
+    class Meta:
+        verbose_name = "Корзина"
+        verbose_name = "Корзина"
+
+    def __str__(self) -> str:
+        return f"Корзина пользователя {self.user.username}"
 
 
 class Favorites(models.Model):
-    pass
+    user = models.ForeignKey(
+        User,
+        verbose_name="Пользователь",
+        related_name="shop_cart_user",
+        on_delete=models.CASCADE
+    )
+    product = models.ForeignKey(
+        Product,
+        verbose_name="Товар",
+        related_name="shop_cart_product",
+        on_delete=models.CASCADE
+    )
 
 
 class Groups(models.Model):
